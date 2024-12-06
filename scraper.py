@@ -50,41 +50,49 @@ class LoterieScraper:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
-            amount = None
 
-            if game == 'euromillions':
-                # Chercher spécifiquement "Jackpot de près de" suivi du montant
-                jackpot_texts = soup.find_all(string=re.compile(r'Jackpot de près de.*€', re.IGNORECASE))
-                for text in jackpot_texts:
-                    match = re.search(r'Jackpot de près de\s*([\d\.,]+)\s*€', text, re.IGNORECASE)
-                    if match:
-                        amount = match.group(1) + ' €'
-                        break
+            # Log pour debug
+            logging.info(f"=== Recherche du montant pour {game} ===")
+            logging.info(f"URL: {url}")
 
-            elif game == 'lotto':
-                # Chercher la date du prochain tirage et le montant associé
-                jackpot_texts = soup.find_all(string=re.compile(r'samedi|mercredi.*Jackpot de.*€', re.IGNORECASE))
-                for text in jackpot_texts:
-                    match = re.search(r'Jackpot de\s*([\d\.,]+)\s*€', text, re.IGNORECASE)
-                    if match:
-                        amount = match.group(1) + ' €'
-                        break
+            # Recherche générale de montants avec le symbole €
+            amount_pattern = re.compile(r'([\d\.]+\.[\d\.]+)\s*€')
+            
+            # Chercher dans tous les éléments de texte
+            all_text_elements = soup.find_all(text=True)
+            potential_amounts = []
+            
+            for element in all_text_elements:
+                text = element.strip()
+                if '€' in text:
+                    logging.info(f"Texte trouvé contenant '€': {text}")
+                    matches = amount_pattern.findall(text)
+                    if matches:
+                        for match in matches:
+                            potential_amount = match.strip()
+                            if potential_amount:
+                                potential_amounts.append(potential_amount)
+                                logging.info(f"Montant potentiel trouvé: {potential_amount} €")
 
-            elif game == 'extra-lotto':
-                # Chercher spécifiquement le texte du tirage spécial
-                jackpot_texts = soup.find_all(string=re.compile(r'vendredi.*Jackpot de.*€', re.IGNORECASE))
-                for text in jackpot_texts:
-                    match = re.search(r'Jackpot de\s*([\d\.,]+)\s*€', text, re.IGNORECASE)
-                    if match:
-                        amount = match.group(1) + ' €'
-                        break
+            # Sélectionner le montant le plus élevé (probablement le jackpot)
+            if potential_amounts:
+                # Convertir les montants en nombres pour comparaison
+                numeric_amounts = []
+                for amt in potential_amounts:
+                    try:
+                        # Remplacer les points des milliers et convertir en nombre
+                        num = float(amt.replace('.', ''))
+                        numeric_amounts.append((num, amt))
+                    except ValueError:
+                        continue
 
-            if amount:
-                # Nettoyer le montant en gardant les points pour les milliers
-                return amount.replace(' ', '')
+                if numeric_amounts:
+                    # Prendre le montant le plus élevé
+                    highest_amount = max(numeric_amounts, key=lambda x: x[0])[1]
+                    logging.info(f"Montant sélectionné pour {game}: {highest_amount} €")
+                    return f"{highest_amount} €"
 
-            logging.info(f"Contenu de la page {game}:")
-            logging.info(soup.get_text()[:1000])
+            logging.info(f"Aucun montant trouvé pour {game}")
             return "Montant non disponible"
 
         except requests.RequestException as e:
