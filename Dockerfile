@@ -7,5 +7,11 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-ENV PORT=8080
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app:app"]
+# Créer le dossier output
+RUN mkdir -p output
+
+# Définir les variables d'environnement
+ENV PORT=10000
+
+# Commande de démarrage
+CMD gunicorn --workers=2 --bind=0.0.0.0:$PORT app:app

@@ -1,8 +1,5 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, render_template_string
 import os
-import schedule
-import time
-from threading import Thread
 from scraper import LoterieScraper
 from pathlib import Path
 
@@ -14,32 +11,21 @@ output_dir.mkdir(exist_ok=True)
 
 def run_scraper():
     scraper = LoterieScraper()
-    scraper.run()
+    return scraper.run()
 
 @app.route('/')
 def home():
-    # Exécuter le scraper si le fichier n'existe pas
-    if not (output_dir / 'index.html').exists():
-        run_scraper()
-    return send_from_directory('output', 'index.html')
-
-def run_schedule():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-if __name__ == '__main__':
-    # Premier scraping au démarrage
+    # Exécuter le scraper à chaque requête
     run_scraper()
     
-    # Planification du scraping toutes les heures
-    schedule.every(1).hours.do(run_scraper)
-    
-    # Démarrage du planificateur dans un thread séparé
-    scheduler_thread = Thread(target=run_schedule)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
-    
+    # Retourner le fichier HTML généré
+    try:
+        return send_from_directory('output', 'index.html')
+    except Exception as e:
+        # En cas d'erreur, retourner un message simple
+        return f"<h1>Service en cours de démarrage...</h1><p>Veuillez rafraîchir dans quelques secondes.</p>"
+
+if __name__ == '__main__':
     # Démarrage du serveur Flask
-    port = int(os.environ.get('PORT', 8080))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
