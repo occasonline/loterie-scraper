@@ -53,29 +53,38 @@ class LoterieScraper:
             amount = None
 
             if game == 'euromillions':
-                # Chercher dans la section des résultats EuroMillions
-                jackpot_div = soup.find('div', class_='jackpot')
-                if jackpot_div:
-                    amount_text = jackpot_div.get_text()
-                    match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:million|millions|€|MILLION|MILLIONS)', amount_text, re.IGNORECASE)
-                    if match:
-                        amount = match.group(0)
+                # Chercher dans les différentes sections possibles
+                jackpot_elements = soup.find_all(['span', 'div', 'p'], string=re.compile(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', re.IGNORECASE))
+                for element in jackpot_elements:
+                    text = element.get_text().strip()
+                    if 'million' in text.lower() or '€' in text:
+                        match = re.search(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', text, re.IGNORECASE)
+                        if match:
+                            amount = match.group(1)
+                            break
 
             elif game == 'lotto':
-                # Chercher dans la section des résultats Lotto
-                jackpot_div = soup.find('div', class_='jackpot')
-                if jackpot_div:
-                    amount_text = jackpot_div.get_text()
-                    match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:million|millions|€|MILLION|MILLIONS)', amount_text, re.IGNORECASE)
-                    if match:
-                        amount = match.group(0)
+                # Chercher dans les différentes sections possibles
+                jackpot_elements = soup.find_all(['span', 'div', 'p'], string=re.compile(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', re.IGNORECASE))
+                for element in jackpot_elements:
+                    text = element.get_text().strip()
+                    if 'million' in text.lower() or '€' in text:
+                        match = re.search(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', text, re.IGNORECASE)
+                        if match:
+                            amount = match.group(1)
+                            break
 
             elif game == 'extra-lotto':
-                # Pour Extra Lotto, chercher le montant minimum garanti
+                # Pour Extra Lotto, montant minimum garanti
                 amount = "3.000.000 €"
 
             if amount:
                 return self.clean_amount(amount)
+
+            # Ajouter des logs pour le débogage
+            logging.info(f"Contenu de la page {game}:")
+            logging.info(soup.get_text()[:500])  # Les 500 premiers caractères
+            
             return "Montant non disponible"
 
         except requests.RequestException as e:
@@ -83,6 +92,7 @@ class LoterieScraper:
             return "Erreur de connexion"
         except Exception as e:
             logging.error(f"Erreur inattendue pour {game}: {e}")
+            logging.error(f"Détails de l'erreur: {str(e)}")
             return "Erreur"
 
     def generate_html(self):
