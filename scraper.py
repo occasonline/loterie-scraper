@@ -49,42 +49,63 @@ class LoterieScraper:
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
+            
+            # Log the raw HTML content for debugging
+            logging.info(f"=== HTML Content for {game} ===")
+            logging.info(response.text[:2000])  # First 2000 characters
+            logging.info("=== End of HTML Content ===")
+            
             soup = BeautifulSoup(response.text, 'html.parser')
             amount = None
 
+            # Log all text content for debugging
+            logging.info(f"=== All Text Content for {game} ===")
+            all_text = soup.get_text(separator='\n', strip=True)
+            logging.info(all_text[:1000])
+            logging.info("=== End of Text Content ===")
+
             if game == 'euromillions':
-                # Chercher dans les différentes sections possibles
-                jackpot_elements = soup.find_all(['span', 'div', 'p'], string=re.compile(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', re.IGNORECASE))
-                for element in jackpot_elements:
-                    text = element.get_text().strip()
-                    if 'million' in text.lower() or '€' in text:
+                # Try different selectors
+                amount_elements = [
+                    soup.find('div', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find('span', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find('p', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find(string=re.compile(r'\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR)', re.I))
+                ]
+                
+                for element in amount_elements:
+                    if element:
+                        text = element.get_text().strip() if hasattr(element, 'get_text') else element.strip()
+                        logging.info(f"Found potential amount text: {text}")
                         match = re.search(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', text, re.IGNORECASE)
                         if match:
                             amount = match.group(1)
                             break
 
             elif game == 'lotto':
-                # Chercher dans les différentes sections possibles
-                jackpot_elements = soup.find_all(['span', 'div', 'p'], string=re.compile(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', re.IGNORECASE))
-                for element in jackpot_elements:
-                    text = element.get_text().strip()
-                    if 'million' in text.lower() or '€' in text:
+                # Try different selectors
+                amount_elements = [
+                    soup.find('div', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find('span', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find('p', class_=re.compile(r'jackpot|prize|amount', re.I)),
+                    soup.find(string=re.compile(r'\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR)', re.I))
+                ]
+                
+                for element in amount_elements:
+                    if element:
+                        text = element.get_text().strip() if hasattr(element, 'get_text') else element.strip()
+                        logging.info(f"Found potential amount text: {text}")
                         match = re.search(r'(\d+[\d\s.,]*\s*(?:million|€|MILLION|EUR))', text, re.IGNORECASE)
                         if match:
                             amount = match.group(1)
                             break
 
             elif game == 'extra-lotto':
-                # Pour Extra Lotto, montant minimum garanti
                 amount = "3.000.000 €"
 
             if amount:
                 return self.clean_amount(amount)
 
-            # Ajouter des logs pour le débogage
-            logging.info(f"Contenu de la page {game}:")
-            logging.info(soup.get_text()[:500])  # Les 500 premiers caractères
-            
             return "Montant non disponible"
 
         except requests.RequestException as e:
