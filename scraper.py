@@ -6,7 +6,6 @@ import logging
 import re
 from pathlib import Path
 
-# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -19,8 +18,8 @@ logging.basicConfig(
 class LoterieScraper:
     def __init__(self):
         self.urls = {
-            'euromillions': 'https://www.loterie-nationale.be/nos-jeux/euromillions',
-            'lotto': 'https://www.loterie-nationale.be/nos-jeux/lotto',
+            'euromillions': 'https://www.loterie-nationale.be/nos-jeux/euromillions/resultats',
+            'lotto': 'https://www.loterie-nationale.be/nos-jeux/lotto/resultats',
             'extra-lotto': 'https://www.loterie-nationale.be/nos-jeux/extra-lotto'
         }
         self.headers = {
@@ -28,39 +27,67 @@ class LoterieScraper:
             'Accept-Language': 'fr-BE,fr;q=0.9,en-US;q=0.8,en;q=0.7'
         }
 
-    def extract_amount(self, text):
-        # Motif pour trouver les montants (ex: 1.000.000 € ou 17 millions €)
-        amount_pattern = re.compile(r'(\d+[\d.,]*\s*(million|€|euros|MILLION|EUROS))', re.IGNORECASE)
-        match = amount_pattern.search(text)
+    def clean_amount(self, amount):
+        if not amount:
+            return "Montant non disponible"
+        # Nettoyer le montant
+        amount = amount.replace(".", "").replace(",", ".")
+        # Extraire le nombre et l'unité
+        match = re.search(r'(\d+(?:\.\d+)?)\s*(million|millions|€|MILLION|MILLIONS|EUR)?', amount, re.IGNORECASE)
         if match:
-            return match.group(1)
-        return None
+            number = float(match.group(1))
+            unit = match.group(2)
+            # Convertir en format standard
+            if unit and 'million' in unit.lower():
+                return f"{number:,.0f}.000.000 €".replace(",", ".")
+            else:
+                return f"{number:,.0f} €".replace(",", ".")
+        return amount
 
-    def get_jackpot(self, url):
+    def get_jackpot(self, url, game):
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
+            amount = None
 
-            # Recherche dans les éléments <b> et <p> contenant des montants
-            for element in soup.find_all(['b', 'p']):
-                if element.string:
-                    amount = self.extract_amount(element.string)
-                    if amount:
-                        return amount
+            if game == 'euromillions':
+                # Chercher dans la section des résultats EuroMillions
+                jackpot_div = soup.find('div', class_='jackpot')
+                if jackpot_div:
+                    amount_text = jackpot_div.get_text()
+                    match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:million|millions|€|MILLION|MILLIONS)', amount_text, re.IGNORECASE)
+                    if match:
+                        amount = match.group(0)
+
+            elif game == 'lotto':
+                # Chercher dans la section des résultats Lotto
+                jackpot_div = soup.find('div', class_='jackpot')
+                if jackpot_div:
+                    amount_text = jackpot_div.get_text()
+                    match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:million|millions|€|MILLION|MILLIONS)', amount_text, re.IGNORECASE)
+                    if match:
+                        amount = match.group(0)
+
+            elif game == 'extra-lotto':
+                # Pour Extra Lotto, chercher le montant minimum garanti
+                amount = "3.000.000 €"
+
+            if amount:
+                return self.clean_amount(amount)
             return "Montant non disponible"
 
         except requests.RequestException as e:
-            logging.error(f"Erreur lors de la récupération du jackpot: {e}")
+            logging.error(f"Erreur lors de la récupération du jackpot {game}: {e}")
             return "Erreur de connexion"
         except Exception as e:
-            logging.error(f"Erreur inattendue: {e}")
+            logging.error(f"Erreur inattendue pour {game}: {e}")
             return "Erreur"
 
     def generate_html(self):
         jackpots = {}
         for game, url in self.urls.items():
-            jackpots[game] = self.get_jackpot(url)
+            jackpots[game] = self.get_jackpot(url, game)
             logging.info(f"Jackpot {game}: {jackpots[game]}")
 
         html_template = f"""
